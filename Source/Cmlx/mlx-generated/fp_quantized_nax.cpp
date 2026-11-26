@@ -328,13 +328,29 @@ struct QuantizedBlockLoader {
       return;
     }
 
+    // The packs past the last column of the tile load zeros and read nothing:
+    // past the last column of the last row they would read past the end of the
+    // weights and the scales.
     int k = 0;
     for (int i = 0; i < n_steps_per_read; i++) {
+      if ((bj + k) * pack_factor >= src_tile_dim.x) {
+        for (int j = 0; j < n_reads_per_scale * pack_factor; j++) {
+          dst[k * pack_factor + j] = T(0);
+        }
+        k += n_reads_per_scale;
+        continue;
+      }
       float scale =
           float(dequantize_scale<T, group_size>(scales[i])) * inv_scale_enc;
       for (int j = 0; j < n_reads_per_scale; j++) {
-        dequantize<T, bits>(
-            src[k * bytes_per_pack], scale, dst + k * pack_factor);
+        if ((bj + k) * pack_factor < src_tile_dim.x) {
+          dequantize<T, bits>(
+              src[k * bytes_per_pack], scale, dst + k * pack_factor);
+        } else {
+          for (int c = 0; c < pack_factor; c++) {
+            dst[k * pack_factor + c] = T(0);
+          }
+        }
         k++;
       }
     }

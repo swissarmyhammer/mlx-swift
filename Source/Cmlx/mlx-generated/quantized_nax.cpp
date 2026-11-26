@@ -775,14 +775,29 @@ struct QuantizedBlockLoader {
       return;
     }
 
+    // The packs past the last column of the tile load zeros and read nothing:
+    // past the last column of the last row they would read past the end of the
+    // weights, the scales and the biases.
+    if (bj * pack_factor >= src_tile_dim.x) {
+      for (int i = 0; i < n_reads * pack_factor; i++) {
+        dst[i] = T(0);
+      }
+      return;
+    }
     T scale = *scales;
     T bias = *biases;
     for (int i = 0; i < n_reads; i++) {
-      dequantize<T, pack_factor, bits>(
-          (device uint8_t*)(src + i * bytes_per_pack),
-          scale,
-          bias,
-          dst + i * pack_factor);
+      if ((bj + i) * pack_factor < src_tile_dim.x) {
+        dequantize<T, pack_factor, bits>(
+            (device uint8_t*)(src + i * bytes_per_pack),
+            scale,
+            bias,
+            dst + i * pack_factor);
+      } else {
+        for (int c = 0; c < pack_factor; c++) {
+          dst[i * pack_factor + c] = T(0);
+        }
+      }
     }
   }
 
@@ -908,14 +923,29 @@ struct QuantizedBlockLoader<
       return;
     }
 
+    // The packs past the last column of the tile load zeros and read nothing:
+    // past the last column of the last row they would read past the end of the
+    // weights, the scales and the biases.
+    if (bj * pack_factor >= src_tile_dim.x) {
+      for (int i = 0; i < n_reads * pack_factor; i++) {
+        dst[i] = T(0);
+      }
+      return;
+    }
     T scale = *scales;
     T bias = *biases;
     for (int i = 0; i < n_reads; i++) {
-      dequantize<T, pack_factor, bits>(
-          (device uint8_t*)(src + i * bytes_per_pack),
-          scale,
-          bias,
-          dst + i * pack_factor);
+      if ((bj + i) * pack_factor < src_tile_dim.x) {
+        dequantize<T, pack_factor, bits>(
+            (device uint8_t*)(src + i * bytes_per_pack),
+            scale,
+            bias,
+            dst + i * pack_factor);
+      } else {
+        for (int c = 0; c < pack_factor; c++) {
+          dst[i * pack_factor + c] = T(0);
+        }
+      }
     }
   }
 
